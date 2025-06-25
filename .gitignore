@@ -16,12 +16,18 @@ dist/
 # Log files
 *.log
 
+# uv
+**uv.lock
+
 # Package files
 *.jar
 
 # Maven
 target/
 dist/
+
+# VsCode-based IDEs
+**.code-workspace
 
 # JetBrains IDE
 .idea/
