@@ -1,9 +1,21 @@
 import csv
-from pydantic import dataclass
+from pydantic import dataclass, BaseModel, Field
 import zipfile
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, List, io, Any
 
+
+class ParserConfig(BaseModel):
+    parser_id: str
+    column_mapping: Dict[str, Tuple[str, str]] = Field(default_factory=dict,
+                                                       description="A mapping of client column names to (multiply column names and transformers")
+
+class IngestionReport(BaseModel):
+    success: bool
+    message: str
+    processed_items: int
+    report: List[Any]
+    stats: Dict[str, Any]
 
 @dataclass
 class ParsedElement:
@@ -27,7 +39,6 @@ class ParsedElement:
 @dataclass
 class ParsedItem:
     elements: List[ParsedElement]
-    is_interpreted: bool = False
 
     def interpret(self, column_mapping: Dict[str, Tuple[str, str]]):
         interpreted_elements = []
@@ -43,6 +54,9 @@ class ParsedItem:
                 )
 
         self.elements = interpreted_elements
-        self.is_interpreted = True
+
+    @property
+    def is_interpreted(self):
+        return all(element.is_interpreted for element in self.elements)
 
 
