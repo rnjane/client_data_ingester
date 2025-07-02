@@ -1,7 +1,7 @@
 import os
 import unittest
 from sqlalchemy import text
-from mply_ingester.backend.config import ConfigBroker
+from mply_ingester.config import ConfigBroker
 
 
 def init_db(session, sql_path):

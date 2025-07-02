@@ -1,8 +1,8 @@
 from typing import Annotated
 from fastapi import Depends, HTTPException, status, Cookie
 from sqlalchemy.orm import Session
-from mply_ingester.backend.config import ConfigBroker
-from mply_ingester.backend.db.models import User, Client
+from mply_ingester.config import ConfigBroker
+from mply_ingester.db.models import User, Client
 
 config = ConfigBroker(['config.py'])  # You'll need to adjust this path based on your setup
 

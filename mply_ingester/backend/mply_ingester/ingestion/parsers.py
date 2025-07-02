@@ -3,7 +3,7 @@ import csv
 import io
 from typing import List, Dict, Tuple
 
-from mply_ingester.client_data_ingestion.base import ParsedItem, ParsedElement
+from mply_ingester.ingestion.base import ParsedItem, ParsedElement
 
 
 class ClientDataParser(ABC):

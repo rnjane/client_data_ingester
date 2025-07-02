@@ -14,6 +14,7 @@ class ConfigBroker:
     def __init__(self, filepaths: list[str]):
         self._config = {}
         self._input_files = filepaths
+        self._locked = False
         for filepath in filepaths:
             self._load_from_file(filepath)
         self._locked = True  # Mark as read-only after initialization

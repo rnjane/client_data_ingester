@@ -1,8 +1,10 @@
 import unittest
-from fastapi.testclient import TestClient
-from mply_ingester.backend.web.app import app
-from mply_ingester.backend.tests.test_utils.base import DBTestCase
 import bcrypt
+
+from fastapi.testclient import TestClient
+
+from mply_ingester.web.app import app
+from mply_ingester.tests.test_utils.base import DBTestCase
 
 class AuthApiTestCase(DBTestCase):
     @classmethod

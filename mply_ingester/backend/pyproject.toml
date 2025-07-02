@@ -1,30 +1,25 @@
 [project]
 name = "mply-ingester"
 version = "0.1.0"
-description = "Add your description here"
+description = "Ingest various forms of client data i"
+authors = [
+    {name = "Multiply",email = "dev@multiply.cloud"}
+]
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.115.13",
-    "pydantic>=2.11.7",
-    "sqlalchemy>=2.0.41",
+    "fastapi (>=0.115.14,<0.116.0)",
+    "sqlalchemy (>=2.0.41,<3.0.0)",
+    "bcrypt (>=4.3.0,<5.0.0)"
 ]
+
+[tool.poetry]
+
+[tool.poetry.group.dev.dependencies]
+click = "^8.2.1"
+pytest = "^8.4.1"
+httpx = "^0.28.1"
 
 [build-system]
-requires = ["setuptools>=64", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["mply_ingester"]
-
-[tool.setuptools.package-dir]
-"mply_ingester" = "mply_ingester"
-
-[dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "mply-ingester",
-    "pytest>=8.4.1",
-]
-
-[tool.uv.sources]
-mply-ingester = { workspace = true }
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

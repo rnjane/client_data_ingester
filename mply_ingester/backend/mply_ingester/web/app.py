@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mply_ingester.backend.web.api import auth
+from mply_ingester.web.api import auth
 
 app = FastAPI(title="Client Data Ingester")
 

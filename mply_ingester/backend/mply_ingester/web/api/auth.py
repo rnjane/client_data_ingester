@@ -4,8 +4,8 @@ from fastapi.security import HTTPBasicCredentials
 from pydantic import BaseModel
 import secrets
 import bcrypt
-from mply_ingester.backend.web.dependencies import DbSession, LoggedInUser
-from mply_ingester.backend.db.models import Client, User
+from mply_ingester.web.dependencies import DbSession, LoggedInUser
+from mply_ingester.db.models import Client, User
 
 
 router = APIRouter()
