@@ -1,10 +1,16 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status, Response
+from typing import Annotated
+
+import bcrypt
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Body
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import HTTPBasicCredentials
 from pydantic import BaseModel
 import secrets
-import bcrypt
-from mply_ingester.web.dependencies import DbSession, LoggedInUser
+from sqlalchemy.orm import Session
+
+from mply_ingester.config import ConfigBroker
+from mply_ingester.web.dependencies import DbSession, LoggedInUser, get_db_session
 from mply_ingester.db.models import Client, User
 
 
@@ -32,17 +38,17 @@ class SignupResponse(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-    credentials: HTTPBasicCredentials,
-    db: DbSession,
-    response: Response
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    response: Response,
+    db: Session = Depends(get_db_session),
 ):
     user = db.query(User).filter(
-        User.email == credentials.username,
+        User.email == form_data.username.strip(),
         User.active == True
-    ).first()
+    ).one_or_none()
     
     if not user or not bcrypt.checkpw(
-        credentials.password.encode('utf-8'),
+        form_data.password.encode('utf-8'),
         user.password_hash.encode('utf-8')
     ):
         # TODO: Vulnerable to timing attack here
@@ -95,12 +101,19 @@ async def logout(
     return {"message": "Successfully logged out"}
 
 
-@router.post("/signup", response_model=SignupResponse)
+# @router.post("/signup", response_model=SignupResponse)
+# async def signup(
+#     req: SignupRequest,
+#     db: DbSession):
+#     db: Session = Depends(get_db_session),
+# ):
+@router.post("/signup")
 async def signup(
     req: SignupRequest,
-    db: DbSession,
-):
-    if db.query(User).filter(User.email == req.email).first():
+    db: Session = Depends(get_db_session)
+) -> SignupResponse:
+    user_email = req.email.strip()
+    if db.query(User).filter(User.email == user_email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -113,7 +126,7 @@ async def signup(
     password_hash = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     user = User(
         client_id=client.id,
-        email=req.email,
+        email=user_email,
         name=req.user_name,
         created_on=datetime.utcnow(),
         password_hash=password_hash,

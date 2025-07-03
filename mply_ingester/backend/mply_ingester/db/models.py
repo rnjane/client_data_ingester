@@ -47,4 +47,4 @@ class ClientProduct(Base):
     min_price = Column(Numeric(12, 2))
     reference_price = Column(Numeric(12, 2))
 
-    client = relationship('Client', back_populates='products')
+    client = relationship('Client')

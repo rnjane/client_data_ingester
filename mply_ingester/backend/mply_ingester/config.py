@@ -1,7 +1,14 @@
 import importlib.util
+import os
 from typing import Any, Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+
+from mply_ingester import default_settings
+
+
+CONFIG_FILE_ENV_VAR = "MPLY_INGESTER_CONFIG"  # Should only be used for testing
+DEFAULT_SETTINGS_FILE_PATH = default_settings.__file__
 
 
 class ConfigError(Exception):
@@ -13,12 +20,19 @@ class ConfigBroker:
 
     def __init__(self, filepaths: list[str]):
         self._config = {}
-        self._input_files = filepaths
         self._locked = False
-        for filepath in filepaths:
+
+        filepaths_to_use = [DEFAULT_SETTINGS_FILE_PATH]
+        if config_from_env := os.environ.get(CONFIG_FILE_ENV_VAR, None):
+            assert os.path.isfile(config_from_env), f"{config_from_env} is not a file or doesnt exist"
+            filepaths_to_use.append(config_from_env)
+        filepaths_to_use.extend(filepaths)
+        for filepath in filepaths_to_use:
             self._load_from_file(filepath)
         self._locked = True  # Mark as read-only after initialization
-        self._db_engine = None  # For engine reuse
+        self._input_files = filepaths_to_use
+
+        self._db_engine = None
 
     def _load_from_file(self, filepath: str) -> None:
         """
@@ -46,7 +60,10 @@ class ConfigBroker:
 
     def __getitem__(self, key: str) -> Any:
         """Get a configuration value using dictionary-style access."""
-        return self._config[key]
+        try:
+            return self._config[key]
+        except KeyError:
+            raise KeyError(f'"{key}" is not present in the current config. Check your config files?')
 
     def __setitem__(self, key: str, value: Any) -> None:
         """Prevent setting configuration values after initialization."""
@@ -102,11 +119,11 @@ class ConfigBroker:
         Returns:
             Session: A new SQLAlchemy session.
         Raises:
-            KeyError: If 'DATABASE_URI' is not present in the config.
+            ConfigError: If 'DATABASE_URI' is not present in the config.
         """
         if 'DATABASE_URI' not in self._config:
-            raise KeyError("DATABASE_URI not found in config.")
+            raise ConfigError("DATABASE_URI not found in config.")
         if self._db_engine is None:
             self._db_engine = create_engine(self['DATABASE_URI'])
-        SessionLocal = sessionmaker(bind=self._db_engine)
-        return SessionLocal()
+        Session = sessionmaker(bind=self._db_engine)
+        return Session()

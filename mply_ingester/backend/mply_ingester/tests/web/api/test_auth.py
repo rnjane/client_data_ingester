@@ -3,13 +3,14 @@ import bcrypt
 
 from fastapi.testclient import TestClient
 
-from mply_ingester.web.app import app
+from mply_ingester.web.app import make_app
 from mply_ingester.tests.test_utils.base import DBTestCase
 
 class AuthApiTestCase(DBTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        app = make_app(cls.config_broker)
         cls.client = TestClient(app)
         cls.signup_data = {
             "company_name": "TestCo",
@@ -21,29 +22,33 @@ class AuthApiTestCase(DBTestCase):
 
 class SignupTestCase(AuthApiTestCase):
     def test_signup_success(self):
-        resp = self.client.post("/auth/signup", json=self.signup_data)
-        self.assertEqual(resp.status_code, 200)
+        resp = self.client.post("/auth/signup", json={'req': self.signup_data})
         data = resp.json()
+        print(data)
+        self.assertEqual(resp.status_code, 200)
         self.assertEqual(data["email"], self.signup_data["email"])
         self.assertEqual(data["name"], self.signup_data["user_name"])
         self.assertEqual(data["company_name"], self.signup_data["company_name"])
 
+class SignupDuplicateEmailTestCase(AuthApiTestCase):
     def test_signup_duplicate_email(self):
         # First sign-up
-        self.client.post("/auth/signup", json=self.signup_data)
+        self.client.post("/auth/signup", json={'req': self.signup_data})
         # Second sign-up with same email
-        resp = self.client.post("/auth/signup", json=self.signup_data)
+        resp = self.client.post("/auth/signup", json={'req': self.signup_data})
+        print(resp.json())
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Email already registered", resp.text)
 
 class LoginLogoutTestCase(AuthApiTestCase):
     def test_login_success(self):
         # Ensure user exists
-        self.client.post("/auth/signup", json=self.signup_data)
+        self.client.post("/auth/signup", json={'req': self.signup_data})
         resp = self.client.post(
             "/auth/login",
-            auth=(self.signup_data["email"], self.signup_data["password"])
+            auth=( self.signup_data["email"], self.signup_data["password"])
         )
+        print(resp.json())
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["email"], self.signup_data["email"])
@@ -52,7 +57,7 @@ class LoginLogoutTestCase(AuthApiTestCase):
         self.assertIn("session_token", resp.cookies)
 
     def test_login_wrong_password(self):
-        self.client.post("/auth/signup", json=self.signup_data)
+        self.client.post("/auth/signup", json={'req': self.signup_data})
         resp = self.client.post(
             "/auth/login",
             auth=(self.signup_data["email"], "wrongpassword")
@@ -62,7 +67,7 @@ class LoginLogoutTestCase(AuthApiTestCase):
 
     def test_logout(self):
         # Sign up and login
-        self.client.post("/auth/signup", json=self.signup_data)
+        self.client.post("/auth/signup", json={'req': self.signup_data})
         login_resp = self.client.post(
             "/auth/login",
             auth=(self.signup_data["email"], self.signup_data["password"])

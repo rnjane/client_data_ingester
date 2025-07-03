@@ -1,13 +1,12 @@
-from typing import Annotated
+from typing import Annotated, Generator
 from fastapi import Depends, HTTPException, status, Cookie
 from sqlalchemy.orm import Session
 from mply_ingester.config import ConfigBroker
 from mply_ingester.db.models import User, Client
 
-config = ConfigBroker(['config.py'])  # You'll need to adjust this path based on your setup
 
-def get_db_session() -> Session:
-    db = config.get_session()
+async def get_db_session(config_broker: ConfigBroker = Depends()) -> Generator[Session, None, None]:
+    db = config_broker.get_session()
     try:
         yield db
     finally:

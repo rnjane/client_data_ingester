@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: mply-ingester-db
+    environment:
+      POSTGRES_DB: mply_ingester
+      POSTGRES_USER: ingester
+      POSTGRES_PASSWORD: 123
+    ports:
+      - "5490:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+#      - ./init_ingester.sql:/docker-entrypoint-initdb.d/init.sql  # Optional: for initialization scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingester -d mply_ingester"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

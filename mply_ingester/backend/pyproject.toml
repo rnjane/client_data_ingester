@@ -8,9 +8,12 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi (>=0.115.14,<0.116.0)",
+    "fastapi (>=0.114.0,<0.116.0)",
     "sqlalchemy (>=2.0.41,<3.0.0)",
-    "bcrypt (>=4.3.0,<5.0.0)"
+    "bcrypt (>=4.3.0,<5.0.0)",
+    "dbmig (>=1.7.1,<2.0.0)",
+    "psycopg2 (>=2.9.10,<3.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)"
 ]
 
 [tool.poetry]
