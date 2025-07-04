@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from mply_ingester.web.app import make_app
 from mply_ingester.tests.test_utils.base import DBTestCase
 from mply_ingester.db.models import ClientProduct, User
+import pytest
 from sqlalchemy import select, text
 
 class BaseProductApiTestCase(DBTestCase):
@@ -180,6 +181,7 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
         products2 = self.session.query(ClientProduct).filter_by(client_id=self.client_id_2).all()
         self.assertEqual(len(products2), 1)
 
+    @pytest.mark.xfail(reason="The assignment requires you to cause this to pass")
     def test_ingest_updates_active_status(self):
         # First ingestion: all products active
         file_bytes_active = self.generate_csv_file(3)
