@@ -21,7 +21,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
-    name = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
     created_on = Column(DateTime, nullable=False)
     password_hash = Column(String(255), nullable=False)
     active = Column(Boolean, nullable=False, server_default='1')

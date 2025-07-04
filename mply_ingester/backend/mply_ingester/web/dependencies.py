@@ -1,5 +1,5 @@
 from typing import Annotated, Generator
-from fastapi import Depends, HTTPException, status, Cookie
+from fastapi import Depends, HTTPException, status, Cookie, Request
 from sqlalchemy.orm import Session
 from mply_ingester.config import ConfigBroker
 from mply_ingester.db.models import User, Client
@@ -13,13 +13,14 @@ async def get_db_session(config_broker: ConfigBroker = Depends()) -> Generator[S
         db.close()
 
 async def get_current_user(
+    request: Request,
     session_token: Annotated[str | None, Cookie()] = None,
     db: Session = Depends(get_db_session)
 ) -> User:
     if not session_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+            detail="Not authenticated" + str(request.cookies)
         )
     
     user = db.query(User).filter(

@@ -9,6 +9,15 @@ def make_app(config_broker: ConfigBroker) -> FastAPI:
 
     app.dependency_overrides[ConfigBroker] = lambda: config_broker
 
+    # Configure CORS
+    # app.add_middleware(
+    #     CORSMiddleware,
+    #     allow_origins=["http://localhost:3000"],  # Adjust based on your frontend URL
+    #     allow_credentials=True,
+    #     allow_methods=["*"],
+    #     allow_headers=["*"],
+    # )
+
     # Include routers
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
 

@@ -58,7 +58,7 @@ class DBHelper:
 
         return exec_cmd(psql_command)
 
-    def nuke_database(self, db_name):
+    def terminate_backends(self, db_name='mply_ingester'):
         assert db_name != 'postgres'
 
         # Terminate all active connections to the database
@@ -67,8 +67,11 @@ class DBHelper:
             FROM pg_stat_activity \
             WHERE datname = '{db_name}' AND pid <> pg_backend_pid();
         """
-        # self.exec_db_command(terminate_query)
+        self.exec_db_command(terminate_query)
 
+
+    def nuke_database(self, db_name):
+        self.terminate_backends(db_name)
         self.exec_db_command('DROP DATABASE IF EXISTS %s;' % db_name)
         self.exec_db_command('CREATE DATABASE %s;' % db_name)
 
@@ -112,5 +115,5 @@ class DBTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        DBHelper(cls.config_broker).terminate_backends()
 
