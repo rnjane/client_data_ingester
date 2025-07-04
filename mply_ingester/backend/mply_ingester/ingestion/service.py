@@ -2,23 +2,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy import update
 from typing import List
 
-from .base import ParserConfig, ParsedItem, IngestionReport
-from .parsers import get_parser
-from .transformers import get_transformer
+from mply_ingester.config import ConfigBroker
+from mply_ingester.db.models import Client, ClientProduct
+from mply_ingester.ingestion.base import ParserConfig, ParsedItem, IngestionReport
 
 class DataIngestionService:
-    def __init__(self, db: Session):
+    def __init__(self, config_broker: ConfigBroker, db: Session, client: Client):
+        self.config_broker = config_broker
         self.db = db
-    
+        self.client = client
+
     def ingest_data(self, parser_config: ParserConfig, client_data: bytes) -> IngestionReport:
         def do_ingest():
-            # Get parser
-            parser = get_parser(parser_config.parser_id)
-            
-            # Parse and interpret data
+            parser = self.config_broker.get_parser(parser_config.parser_id)
             parsed_items = parser.process_client_data(client_data, parser_config.column_mapping)
-            
-            # Apply to database
+
             processed_count = self._apply_to_database(parsed_items)
             stats = {
                 "processed_count": processed_count,
@@ -38,10 +36,12 @@ class DataIngestionService:
         try:
             return do_ingest()
         except Exception as e:
+            raise
             return IngestionReport(
                 success=False,
                 message=f"Error processing data: {str(e)}",
                 processed_items=0,
+                report=[],
                 stats={}
             )
     
@@ -60,7 +60,7 @@ class DataIngestionService:
                 # For this example, we'll always insert new records
                 # In a real application, you might want to check for existing records
                 # and update them instead
-                db_record = ClientData(**record_data)
+                db_record = ClientProduct(**(record_data | {'client_id': self.client.id}))
                 self.db.add(db_record)
                 processed_count += 1
         

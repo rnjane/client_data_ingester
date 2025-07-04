@@ -127,3 +127,20 @@ class ConfigBroker:
             self._db_engine = create_engine(self['DATABASE_URI'])
         Session = sessionmaker(bind=self._db_engine)
         return Session()
+    
+    def get_transformer(self, transformer_id: str):
+        # Import inside the method to avoid circular imports
+        from mply_ingester.ingestion.transformers import BaseTransformer
+        for cls in BaseTransformer.__subclasses__():
+            if cls.id is not None and cls.id == transformer_id:
+                return cls()
+        raise ValueError(f"Unknown transformer: {transformer_id}")
+
+    def get_parser(self, parser_id: str):
+        # Import inside the method to avoid circular imports
+        from mply_ingester.ingestion.parsers import ClientDataParser
+        for cls in ClientDataParser.__subclasses__():
+            if cls.id is not None and cls.id == parser_id:
+                return cls(self)
+        raise ValueError(f"No parser found for id: {parser_id}")
+

@@ -3,6 +3,10 @@ from decimal import Decimal
 from typing import Any
 
 
+class TransformerError(Exception):
+    pass
+
+
 class BaseTransformer(ABC):
 
     id = None
@@ -47,10 +51,18 @@ class IntegerTransformer(BaseTransformer):
             except ValueError:
                 return 0
         return 0
+    
+class BooleanTransformer(BaseTransformer):
 
-def get_transformer(transformer_id: str) -> BaseTransformer:
-    for cls in BaseTransformer.__subclasses__():
-        if cls.id is not None and cls.id == transformer_id:
-            return cls()
-            
-    raise ValueError(f"Unknown transformer: {transformer_id}")
+    id = 'boolean'
+
+    boolean_yes = ['yes', 'true', '1']  
+    boolean_no = ['no', 'false', '0']
+
+    def transform(self, value: Any) -> bool:
+        cleaned = str(value).strip().lower()
+        if cleaned in self.boolean_yes:
+            return True
+        if cleaned in self.boolean_no:
+            return False
+        raise TransformerError(f"Invalid boolean value: {value}")

@@ -1,14 +1,26 @@
-import csv
-from pydantic import dataclass, BaseModel, Field
-import zipfile
 from abc import ABC, abstractmethod
+import csv
 from typing import Dict, Tuple, List, io, Any
 
+from mply_ingester.config import ConfigBroker
+from pydantic import BaseModel, Field
+from pydantic.dataclasses import dataclass
+import zipfile
+
+
+from mply_ingester.db.models import ClientProduct
+
+ALL_MULTIPLY_COLUMN_NAMES = [
+    column.name
+    for column in ClientProduct.__table__.columns
+    if column.name != "id"
+]
 
 class ParserConfig(BaseModel):
     parser_id: str
     column_mapping: Dict[str, Tuple[str, str]] = Field(default_factory=dict,
                                                        description="A mapping of client column names to (multiply column names and transformers")
+
 
 class IngestionReport(BaseModel):
     success: bool
@@ -40,7 +52,7 @@ class ParsedElement:
 class ParsedItem:
     elements: List[ParsedElement]
 
-    def interpret(self, column_mapping: Dict[str, Tuple[str, str]]):
+    def interpret(self, config_broker: ConfigBroker, column_mapping: Dict[str, Tuple[str, str]]):
         interpreted_elements = []
 
         for element in self.elements:
@@ -48,7 +60,7 @@ class ParsedItem:
 
             if client_column_name in column_mapping:
                 multiply_column_name, transformer_name = column_mapping[client_column_name]
-                transformer = get_transformer(transformer_name)
+                transformer = config_broker.get_transformer(transformer_name)
                 interpreted_elements.append(
                     element.interpret(client_column_name, multiply_column_name, transformer)
                 )

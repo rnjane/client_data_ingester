@@ -3,17 +3,23 @@ import csv
 import io
 from typing import List, Dict, Tuple
 
+from mply_ingester.config import ConfigBroker
 from mply_ingester.ingestion.base import ParsedItem, ParsedElement
 
 
 class ClientDataParser(ABC):
     """Parse and interpret client data"""
 
+    id = None
+
+    def __init__(self, config_broker: ConfigBroker):
+        self.config_broker = config_broker
+
     def process_client_data(self, client_data: bytes, column_mapping: Dict[str, Tuple[str, str]]) -> List[ParsedItem]:
         parsed_items = self.parse_client_data(client_data)
 
         for item in parsed_items:
-            item.interpret(column_mapping)
+            item.interpret(self.config_broker, column_mapping)
 
         return parsed_items
 
