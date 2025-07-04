@@ -119,7 +119,8 @@ class ProductListApiTestCase(BaseProductApiTestCase):
         self.assertTrue(all(sku.startswith("U2SKU") for sku in skus2))
 
 class ProductIngestApiTestCase(BaseProductApiTestCase):
-    def generate_csv_file(self, num_rows):
+    def generate_csv_file(self, num_rows, active=True):
+        assert isinstance(active, bool)
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=["sku", "title", "active"])
         writer.writeheader()
@@ -127,7 +128,7 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
             writer.writerow({
                 "sku": f"SKU{i}",
                 "title": f"Product {i}",
-                "active": "1"
+                "active": "1" if active else "0"
             })
         return output.getvalue().encode("utf-8")
 
@@ -178,6 +179,34 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
         self.create_product(self.client_id_2, sku="U2SKU2", title="U2 Product 2", active=True)
         products2 = self.session.query(ClientProduct).filter_by(client_id=self.client_id_2).all()
         self.assertEqual(len(products2), 1)
+
+    def test_ingest_updates_active_status(self):
+        # First ingestion: all products active
+        file_bytes_active = self.generate_csv_file(3)
+        resp1 = self.ingest_products(self.client1, file_bytes_active)
+        self.assertEqual(resp1.status_code, 200)
+        data1 = resp1.json()
+        self.assertTrue(data1["success"])
+        self.assertEqual(data1["processed_items"], 3)
+        # Check all products are active
+        products = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
+        self.assertEqual(len(products), 3)
+        self.assertTrue(all(p.active for p in products))
+
+        # Second ingestion: same SKUs, but all inactive
+        # For any client_product, the sku is the unique identifier,
+        # Therefore we expect that this next bit will change the active status of the existing products
+        # And not create new ones
+        file_bytes_inactive = self.generate_csv_file(3, active=False)
+        resp2 = self.ingest_products(self.client1, file_bytes_inactive)
+        self.assertEqual(resp2.status_code, 200)
+        data2 = resp2.json()
+        self.assertTrue(data2["success"])
+        self.assertEqual(data2["processed_items"], 3)
+        # Check all products are now inactive
+        products_after = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
+        self.assertEqual(len(products_after), 3)
+        self.assertTrue(all(not p.active for p in products_after))
 
 if __name__ == "__main__":
     unittest.main()
