@@ -93,18 +93,7 @@ async def logout(
 
     return {"message": "Successfully logged out"}
 
-# class SignupRequest(BaseModel):
-#     company_name: str
-#     address: str | None = None
-#     email: str
-#     password: str
 
-# @router.post("/signup", response_model=SignupResponse)
-# async def signup(
-#     req: SignupRequest,
-#     db: DbSession):
-#     db: Session = Depends(get_db_session),
-# ):
 @router.post("/signup")
 async def signup(
     full_name: Annotated[str, Form(min_length=3, max_length=50)],
