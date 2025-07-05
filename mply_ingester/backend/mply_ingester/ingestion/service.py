@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import update
+from sqlalchemy import update, func
 from typing import List
 
 from mply_ingester.config import ConfigBroker
@@ -57,9 +57,22 @@ class DataIngestionService:
                 record_data[element.column_name] = element.value
             
             if record_data:
-                # For this example, we'll always insert new records
-                # In a real application, you might want to check for existing records
-                # and update them instead
+                # Handle existing record update or new record creation
+                if record_data.get('sku'):
+                    existing_record = self.db.query(ClientProduct).filter_by(
+                        sku=record_data['sku'],
+                        client_id=self.client.id
+                    ).first()
+                    
+                    if existing_record:
+                        for key, value in record_data.items():
+                            if key != 'sku' and value is not None:
+                                setattr(existing_record, key, value)
+                        existing_record.last_changed_on = func.current_timestamp()
+                        processed_count += 1
+                        continue
+                
+                # Create new record (no SKU, empty SKU, or SKU not found)
                 db_record = ClientProduct(**(record_data | {'client_id': self.client.id}))
                 self.db.add(db_record)
                 processed_count += 1

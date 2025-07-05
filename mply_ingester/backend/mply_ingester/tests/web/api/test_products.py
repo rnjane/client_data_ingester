@@ -149,6 +149,9 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
             data={'parser_config': json.dumps(parser_config)},
             files=files,
         )
+        # Refresh session to ensure we see committed changes
+        self.refresh_session()
+        
         return resp
 
     def test_ingest_small_file(self):
@@ -209,6 +212,83 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
         products_after = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
         self.assertEqual(len(products_after), 3)
         self.assertTrue(all(not p.active for p in products_after))
+
+    def test_ingest_records_without_sku(self):
+        """Test that all records are processed, including those with empty SKUs."""
+        csv_data = [
+            {"sku": "SKU1", "title": "Product 1", "active": "1"},
+            {"sku": "", "title": "Product 2", "active": "1"},  # Empty SKU
+            {"sku": "", "title": "Product 3", "active": "0"},  # Empty SKU
+        ]
+        file_bytes = self._create_csv_file(csv_data)
+        
+        resp = self.ingest_products(self.client1, file_bytes)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["success"])
+        self.assertEqual(resp.json()["processed_items"], 3)
+        
+        # All records should be created
+        products = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
+        self.assertEqual(len(products), 3)
+        
+        # Verify products with empty SKUs were created
+        empty_sku_products = [p for p in products if p.sku == ""]
+        self.assertEqual(len(empty_sku_products), 2)
+
+    def test_ingest_mixed_sku_scenarios(self):
+        """Test mixed scenarios: existing SKU, new SKU, and empty SKU."""
+        # Create existing product
+        self.create_product(self.client_id_1, sku="EXISTING", title="Old Title", active=True)
+        
+        csv_data = [
+            {"sku": "EXISTING", "title": "Updated Title", "active": "0"},  # Update existing
+            {"sku": "NEW_SKU", "title": "New Product", "active": "1"},     # New SKU
+            {"sku": "", "title": "No SKU Product", "active": "1"},         # Empty SKU (creates new)
+        ]
+        file_bytes = self._create_csv_file(csv_data)
+        
+        resp = self.ingest_products(self.client1, file_bytes)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["success"])
+        self.assertEqual(resp.json()["processed_items"], 3)
+        
+        # Should have 3 products: one updated, two new
+        products = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
+        self.assertEqual(len(products), 3)
+        
+        # Verify existing product was updated
+        existing = self.session.query(ClientProduct).filter_by(sku="EXISTING").first()
+        self.assertEqual(existing.title, "Updated Title")
+        self.assertFalse(existing.active)
+        
+        # Verify new product was created
+        new_product = self.session.query(ClientProduct).filter_by(sku="NEW_SKU").first()
+        self.assertIsNotNone(new_product)
+        self.assertEqual(new_product.title, "New Product")
+
+    def test_ingest_sku_not_in_database(self):
+        """Test that new SKUs create new records."""
+        file_bytes = self.generate_csv_file(2)
+        resp = self.ingest_products(self.client1, file_bytes)
+        
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["success"])
+        self.assertEqual(resp.json()["processed_items"], 2)
+        
+        # Verify products were created
+        products = self.session.query(ClientProduct).filter_by(client_id=self.client_id_1).all()
+        self.assertEqual(len(products), 2)
+        self.assertIn("SKU0", [p.sku for p in products])
+        self.assertIn("SKU1", [p.sku for p in products])
+
+    def _create_csv_file(self, data):
+        """Helper method to create CSV file from data."""
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["sku", "title", "active"])
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+        return output.getvalue().encode("utf-8")
 
 if __name__ == "__main__":
     unittest.main()
