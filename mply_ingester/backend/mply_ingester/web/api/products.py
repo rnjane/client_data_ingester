@@ -79,8 +79,15 @@ async def ingest_client_products(
     data_file: Annotated[UploadFile, File(...)],
     db: DbSession,
     current_client: LoggedInClient,
-    config_broker: ConfigBroker = Depends()
+    config_broker: ConfigBroker = Depends(),
+    full_update: Annotated[bool, Query(description="Full update mode: any product ingested is active, any absent product is inactive")] = False
 ):
+    """
+    Ingest client products. 
+    
+    When full_update=False (default): Incremental mode - updates existing products or creates new ones
+    When full_update=True: Full update mode - any product ingested is active, any absent product is inactive
+    """
     try:
         parser_config_obj = ParserConfig.model_validate_json(parser_config)
     except Exception as e:
@@ -88,7 +95,11 @@ async def ingest_client_products(
     # Read file content
     file_bytes = await data_file.read()
     # Ingest data
-    # config_broker = ''
     service = DataIngestionService(config_broker, db, current_client)
-    report = service.ingest_data(parser_config_obj, file_bytes)
+    
+    if full_update:
+        report = service.ingest_data_full_update(parser_config_obj, file_bytes)
+    else:
+        report = service.ingest_data(parser_config_obj, file_bytes)
+    
     return report

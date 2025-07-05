@@ -68,6 +68,27 @@ class BaseProductApiTestCase(DBTestCase):
         self.session.commit()
         return prod
 
+    def ingest_products(self, client, file_bytes, parser_config=None):
+        if parser_config is None:
+            parser_config = {
+                "parser_id": "csv",
+                "column_mapping": {
+                    "sku": ["sku", "text"],
+                    "title": ["title", "text"],
+                    "active": ["active", "boolean"]
+                }
+            }
+        files = {"data_file": ("products.csv", file_bytes, "text/csv")}
+        resp = client.post(
+            "/products/ingest",
+            data={'parser_config': json.dumps(parser_config)},
+            files=files,
+        )
+        # Refresh session to ensure we see committed changes
+        self.refresh_session()
+        
+        return resp
+
 class ProductListApiTestCase(BaseProductApiTestCase):
     def list_products(self, client, **params):
         resp = client.get("/products/list", params=params)
@@ -132,27 +153,6 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
                 "active": "1" if active else "0"
             })
         return output.getvalue().encode("utf-8")
-
-    def ingest_products(self, client, file_bytes, parser_config=None):
-        if parser_config is None:
-            parser_config = {
-                "parser_id": "csv",
-                "column_mapping": {
-                    "sku": ["sku", "text"],
-                    "title": ["title", "text"],
-                    "active": ["active", "boolean"]
-                }
-            }
-        files = {"data_file": ("products.csv", file_bytes, "text/csv")}
-        resp = client.post(
-            "/products/ingest",
-            data={'parser_config': json.dumps(parser_config)},
-            files=files,
-        )
-        # Refresh session to ensure we see committed changes
-        self.refresh_session()
-        
-        return resp
 
     def test_ingest_small_file(self):
         file_bytes = self.generate_csv_file(3)
@@ -289,6 +289,75 @@ class ProductIngestApiTestCase(BaseProductApiTestCase):
         for row in data:
             writer.writerow(row)
         return output.getvalue().encode("utf-8")
+
+class ProductFullUpdateApiTestCase(BaseProductApiTestCase):
+    def generate_csv_file(self, rows):
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["sku", "title", "active"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue().encode("utf-8")
+
+    def ingest_products_full_update(self, client, file_bytes, parser_config=None):
+        if parser_config is None:
+            parser_config = {
+                "parser_id": "csv",
+                "column_mapping": {
+                    "sku": ["sku", "text"],
+                    "title": ["title", "text"],
+                    "active": ["active", "boolean"]
+                }
+            }
+        files = {"data_file": ("products.csv", file_bytes, "text/csv")}
+        resp = client.post(
+            "/products/ingest",
+            data={'parser_config': json.dumps(parser_config)},
+            files=files,
+            params={'full_update': True}
+        )
+        self.refresh_session()
+        return resp
+
+    def test_full_update_deactivates_absent_products(self):
+        """Full update: products not in file are deactivated."""
+        self.create_product(self.client_id_1, sku="A", title="Product A", active=True)
+        self.create_product(self.client_id_1, sku="B", title="Product B", active=True)
+        # Ingest only A
+        csv_data = [
+            {"sku": "A", "title": "Product A Updated", "active": "1"}
+        ]
+        file_bytes = self.generate_csv_file(csv_data)
+        resp = self.ingest_products_full_update(self.client1, file_bytes)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+        # A is active and updated, B is deactivated
+        a = self.session.query(ClientProduct).filter_by(sku="A", client_id=self.client_id_1).first()
+        b = self.session.query(ClientProduct).filter_by(sku="B", client_id=self.client_id_1).first()
+        self.assertTrue(a.active)
+        self.assertEqual(a.title, "Product A Updated")
+        self.assertFalse(b.active)
+
+    def test_default_mode_does_not_deactivate(self):
+        """Default mode: products not in file remain active."""
+        self.create_product(self.client_id_1, sku="A", title="Product A", active=True)
+        self.create_product(self.client_id_1, sku="B", title="Product B", active=True)
+        # Ingest only A
+        csv_data = [
+            {"sku": "A", "title": "Product A Updated", "active": "1"}
+        ]
+        file_bytes = self.generate_csv_file(csv_data)
+        resp = self.ingest_products(self.client1, file_bytes)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+        # A is active and updated, B is still active
+        a = self.session.query(ClientProduct).filter_by(sku="A", client_id=self.client_id_1).first()
+        b = self.session.query(ClientProduct).filter_by(sku="B", client_id=self.client_id_1).first()
+        self.assertTrue(a.active)
+        self.assertEqual(a.title, "Product A Updated")
+        self.assertTrue(b.active)
 
 if __name__ == "__main__":
     unittest.main()
