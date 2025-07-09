@@ -312,9 +312,8 @@ class ProductFullUpdateApiTestCase(BaseProductApiTestCase):
         files = {"data_file": ("products.csv", file_bytes, "text/csv")}
         resp = client.post(
             "/products/ingest",
-            data={'parser_config': json.dumps(parser_config)},
-            files=files,
-            params={'full_update': True}
+            data={'parser_config': json.dumps(parser_config), 'full_update': True},
+            files=files
         )
         self.refresh_session()
         return resp
