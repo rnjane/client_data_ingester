@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import update
-from typing import List
+from sqlalchemy import update, func
+from typing import List, Set
 
 from mply_ingester.config import ConfigBroker
 from mply_ingester.db.models import Client, ClientProduct
@@ -12,57 +12,98 @@ class DataIngestionService:
         self.db = db
         self.client = client
 
-    def ingest_data(self, parser_config: ParserConfig, client_data: bytes) -> IngestionReport:
-        def do_ingest():
+    def _extract_skus_from_items(self, parsed_items: List[ParsedItem]) -> Set[str]:
+        """Extract all SKUs from parsed items."""
+        ingested_skus: Set[str] = set()
+        for item in parsed_items:
+            assert item.is_interpreted, "Parsed item is not interpreted"
+
+            for element in item.elements:
+                if element.column_name == 'sku' and element.value:
+                    ingested_skus.add(element.value)
+                    break
+        return ingested_skus
+
+    def ingest_data(self, parser_config: ParserConfig, client_data: bytes, full_update: bool = False) -> IngestionReport:
+        try:
             parser = self.config_broker.get_parser(parser_config.parser_id)
             parsed_items = parser.process_client_data(client_data, parser_config.column_mapping)
 
-            processed_count = self._apply_to_database(parsed_items)
-            stats = {
-                "processed_count": processed_count,
-                # "error_count": 0,
-                # "skipped_count": 0,
-                # "total_count": processed_count
-            }
+            ingested_skus = self._extract_skus_from_items(parsed_items) if full_update else None
+            
+            processed_count, deactivated_count = self._apply_to_database(parsed_items, full_update, ingested_skus)
+            
+            stats = {"processed_count": processed_count}
+            if full_update:
+                stats.update({
+                    "deactivated_count": deactivated_count,
+                    "total_ingested_skus": len(ingested_skus)
+                })
+
+            if full_update:
+                message = f"Full update completed. {processed_count} products processed, {deactivated_count} products deactivated."
+            else:
+                message = "Success"
             
             return IngestionReport(
                 success=True,
-                message="Success",
+                message=message,
                 processed_items=processed_count,
-                report=[],  # TODO: Add a sample of the data that was ingested
+                report=[],
                 stats=stats
             )
 
-        try:
-            return do_ingest()
         except Exception as e:
-            raise
+            error_type = "full update" if full_update else "data"
             return IngestionReport(
                 success=False,
-                message=f"Error processing data: {str(e)}",
+                message=f"Error processing {error_type}: {str(e)}",
                 processed_items=0,
                 report=[],
                 stats={}
             )
     
-    def _apply_to_database(self, parsed_items: List[ParsedItem]) -> int:
+    def _apply_to_database(self, parsed_items: List[ParsedItem], full_update: bool = False, ingested_skus: Set[str] = None) -> tuple[int, int]:
+        if full_update and ingested_skus is None:
+            raise ValueError("ingested_skus must be provided when full_update=True")
+        
         processed_count = 0
+        deactivated_count = 0
+        
+        if full_update:
+            deactivated_count = self.db.query(ClientProduct).filter(
+                ClientProduct.client_id == self.client.id,
+                ClientProduct.sku.isnot(None),
+                ~ClientProduct.sku.in_(ingested_skus)
+            ).update({
+                'active': False,
+                'last_changed_on': func.current_timestamp()
+            })
         
         for item in parsed_items:
             assert item.is_interpreted, "Parsed item is not interpreted"
             
-            # Convert parsed elements to database record
-            record_data = {}
-            for element in item.elements:
-                record_data[element.column_name] = element.value
+            record_data = {element.column_name: element.value for element in item.elements}
+            if not record_data:
+                continue
             
-            if record_data:
-                # For this example, we'll always insert new records
-                # In a real application, you might want to check for existing records
-                # and update them instead
-                db_record = ClientProduct(**(record_data | {'client_id': self.client.id}))
-                self.db.add(db_record)
-                processed_count += 1
+            sku = record_data.get('sku')
+            if sku:
+                existing_record = self.db.query(ClientProduct).filter_by(
+                    sku=sku, client_id=self.client.id
+                ).first()
+                
+                if existing_record:
+                    for key, value in record_data.items():
+                        if key != 'sku' and value is not None:
+                            setattr(existing_record, key, value)
+                    existing_record.last_changed_on = func.current_timestamp()
+                    processed_count += 1
+                    continue
+            
+            db_record = ClientProduct(**(record_data | {'client_id': self.client.id}))
+            self.db.add(db_record)
+            processed_count += 1
         
         self.db.commit()
-        return processed_count
+        return processed_count, deactivated_count

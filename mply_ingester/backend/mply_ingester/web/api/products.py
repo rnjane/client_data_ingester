@@ -10,6 +10,7 @@ from mply_ingester.db.models import ClientProduct
 from mply_ingester.ingestion.base import ParserConfig, IngestionReport
 from mply_ingester.ingestion.service import DataIngestionService
 from pydantic import BaseModel
+from datetime import datetime
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ class ClientProductOut(BaseModel):
     remote_id: Optional[str]
     brand: Optional[str]
     title: Optional[str]
-    last_changed_on: Optional[str]
+    last_changed_on: Optional[datetime]
     stock_quantity: Optional[int]
     active: bool
     max_price: Optional[float]
@@ -79,7 +80,8 @@ async def ingest_client_products(
     data_file: Annotated[UploadFile, File(...)],
     db: DbSession,
     current_client: LoggedInClient,
-    config_broker: ConfigBroker = Depends()
+    config_broker: ConfigBroker = Depends(),
+    full_update: Annotated[bool, Body(description="Full update mode: any product ingested is active, any absent product is inactive")] = False
 ):
     try:
         parser_config_obj = ParserConfig.model_validate_json(parser_config)
@@ -88,7 +90,8 @@ async def ingest_client_products(
     # Read file content
     file_bytes = await data_file.read()
     # Ingest data
-    # config_broker = ''
     service = DataIngestionService(config_broker, db, current_client)
-    report = service.ingest_data(parser_config_obj, file_bytes)
+    
+    report = service.ingest_data(parser_config_obj, file_bytes, full_update=full_update)
+    
     return report

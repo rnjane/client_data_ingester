@@ -117,3 +117,14 @@ class DBTestCase(unittest.TestCase):
     def tearDownClass(cls):
         DBHelper(cls.config_broker).terminate_backends()
 
+    def refresh_session(self):
+        """Refresh the session to ensure we see latest committed changes"""
+        self.session.commit()
+        self.session.close()
+        self.session = self.config_broker.get_session()
+        
+    def tearDown(self):
+        """Refresh session after each test to ensure fresh data"""
+        super().tearDown()
+        self.refresh_session()
+
